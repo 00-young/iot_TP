@@ -11,16 +11,11 @@ import adafruit_dht
 from lcd_control import show_message, clear
 
 from servo_control import open_lid
-# LED is not wired up yet. Uncomment when connected.
-# Suggested pins:
-#   LED (CAN_METAL): GPIO17
-#   LED (PLASTIC):   GPIO27
-#   LED (PAPER):     GPIO13
-# from led_control import light_up, all_off
+from led_control import light_up, all_off
 
 MODEL_PATH = "best.pt"
 CONF_THRESHOLD = 0.5
-VOTE_ROUNDS = 5
+VOTE_ROUNDS = 3
 VOTE_INTERVAL = 0.3
 
 PROXIMITY_THRESHOLD_CM = 30
@@ -175,14 +170,11 @@ def main():
                     if result["class_name"] in ("CAN_METAL", "PLASTIC"):
                         open_lid(result["class_name"])
 
-                    # LED (not wired yet)
-                    # if result["class_name"] in ("CAN_METAL", "PLASTIC"):
-                    #     light_up(result["class_name"])
-                    #     all_off()
-                    # elif result["class_name"] == "PAPER":
-                    #     light_up("PAPER")
-                    #     time.sleep(2)
-                    #     all_off()
+                    # LED
+                    if result["class_name"] in ("CAN_METAL", "PLASTIC"):
+                        light_up(result["class_name"])
+                        time.sleep(1)
+                        all_off()
 
                     time.sleep(2)
                     show_message("System Ready")
@@ -214,6 +206,7 @@ def main():
     finally:
         picam2.stop()
         clear()
+        all_off()
         if dht is not None:
             dht.exit()
 
