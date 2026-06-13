@@ -6,32 +6,41 @@ SERVO_PINS = {
     "PLASTIC": 6,
 }
 
-OPEN_ANGLE = 90
-CLOSED_ANGLE = 0
+SERVO_ANGLES = {
+    "CAN_METAL": {"open": 0, "closed": 90},
+    "PLASTIC": {"open": 90, "closed": 0},
+}
+
 OPEN_DURATION = 3
 
 servos = {}
 for bin_name, pin in SERVO_PINS.items():
-    servos[bin_name] = AngularServo(
+    servo = AngularServo(
         pin,
         min_angle=0,
         max_angle=180,
         min_pulse_width=0.0005,
         max_pulse_width=0.0025,
     )
-    servos[bin_name].angle = CLOSED_ANGLE
+    servo.angle = SERVO_ANGLES[bin_name]["closed"]
+    time.sleep(0.3)
+    servo.detach()
+    servos[bin_name] = servo
 
 
 def open_lid(class_name: str, duration: float = OPEN_DURATION):
     servo = servos.get(class_name)
-    if servo is None:
+    angles = SERVO_ANGLES.get(class_name)
+    if servo is None or angles is None:
         print(f"[SERVO] No servo configured for class: {class_name}")
         return
 
     print(f"[SERVO] Opening lid for {class_name}")
-    servo.angle = OPEN_ANGLE
+    servo.angle = angles["open"]
     time.sleep(duration)
-    servo.angle = CLOSED_ANGLE
+    servo.angle = angles["closed"]
+    time.sleep(0.3)
+    servo.detach()
     print(f"[SERVO] Closed lid for {class_name}")
 
 
