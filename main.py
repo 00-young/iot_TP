@@ -54,7 +54,7 @@ class WasteClassifier:
     def classify_frame(self, frame):
         results = self.model.predict(source=frame, conf=self.conf, verbose=False)
 
-        if len(results) == 0 or len(results[0].boxes) == 0:
+        if len(results) == 0 or results[0].boxes is None or  len(results[0].boxes) == 0:
             return None
 
         boxes = results[0].boxes
