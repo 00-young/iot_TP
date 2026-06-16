@@ -1,4 +1,5 @@
 import time
+import threading
 from collections import Counter
 
 import cv2
@@ -52,7 +53,6 @@ LABEL_REMINDER = {
     "can": None,
     "paper": None,
 }
-
 
 class WasteClassifier:
     def __init__(self, model_path: str = MODEL_PATH, conf: float = CONF_THRESHOLD):
@@ -111,95 +111,83 @@ class WasteClassifier:
 
         most_common_class, _ = Counter(votes).most_common(1)[0]
         return last_result_by_class[most_common_class]
-
-
+    
 def main():
     classifier = WasteClassifier()
 
-    sensor = DistanceSensor(echo=ECHO_PIN, trigger=TRIGGER_PIN, max_distance=4)
-
-    dht = None
-    dht_failed = False
-    if DHT_PIN is None:
-        dht_failed = True
-        print("온습도 센서 인식 못함!")
-    else:
-        try:
-            dht = adafruit_dht.DHT11(DHT_PIN)
-        except Exception:
-            dht_failed = True
-            print("온습도 센서 인식 못함!")
-
+    # --- 카메라 초기화 ---
     picam2 = Picamera2()
-    config = picam2.create_preview_configuration(
-        main={"format": "RGB888", "size": (640, 480)}
-    )
+    config = picam2.create_preview_configuration(main={"size": (640, 480),"format":"RGB888"})
     picam2.configure(config)
     picam2.start()
-    time.sleep(1)
+    time.sleep(2)  # 카메라 워밍업
 
-    show_message("System Ready")
-    print("[INFO] System ready. Press Ctrl+C to stop.")
+    # --- 거리 센서 (HC-SR04) ---
+    sensor = DistanceSensor(echo=ECHO_PIN, trigger=TRIGGER_PIN, max_distance=2.0)
 
-    last_env_check = 0
+    # --- 온습도 센서 (DHT11) ---
+    dht = None
+    if DHT_PIN is not None:
+        try:
+            dht = adafruit_dht.DHT11(DHT_PIN)
+        except Exception as e:
+            print(f"[WARN] DHT init failed: {e}")
+            dht = None
+
+    def capture_func():
+        frame = picam2.capture_array()
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            frame = frame[:, :, :3]   # 알파(X) 채널 제거 -> 3채널
+        return frame
+
+    print("[INFO] System ready. Waiting for objects...")
+    show_message("Ready")
+    last_env_check = 0.0
 
     try:
         while True:
-            dist_cm = sensor.distance * 100
+            distance_cm = sensor.distance * 100  # m -> cm
 
-            if dist_cm <= PROXIMITY_THRESHOLD_CM:
-                print(f"[PROXIMITY] Object detected at {dist_cm:.1f} cm -> running YOLO")
-                show_message("Scanning...")
+            # --- 물체 감지되면 분류 시작 ---
+            if distance_cm <= PROXIMITY_THRESHOLD_CM:
+                print(f"[INFO] Object detected at {distance_cm:.1f} cm")
+                show_message("Detecting...")
 
-                def capture():
-                    f = picam2.capture_array()
-                    return cv2.cvtColor(f, cv2.COLOR_RGB2BGR)
-
-                result = classifier.classify_with_voting(capture)
+                result = classifier.classify_with_voting(capture_func)
 
                 if result is not None:
-                    print(
-                        f"[DETECT] raw={result['raw_class_name']} -> "
-                        f"{result['class_name']} (conf={result['confidence']:.2f})"
-                    )
+                    print(f"[RESULT] {result['raw_class_name']} -> "
+                          f"{result['class_name']} ({result['confidence']:.2f})")
 
-                    line2 = result["reminder"] if result["reminder"] else f"Open {result['class_name']} Lid"
-                    show_message(result["message"], line2)
+                    # 라벨 제거 안내가 있으면 먼저 보여줌
+                    if result["reminder"]:
+                        show_message(result["reminder"])
+                        time.sleep(2)
 
-                    # Servo actuation
-                    if result["class_name"] in ("CAN_METAL", "PLASTIC"):
-                        open_lid(result["class_name"])
+                    show_message(result["message"])
 
-                    # LED
-                    if result["class_name"] in ("CAN_METAL", "PLASTIC"):
-                        light_up(result["class_name"])
-                        time.sleep(1)
-                        all_off()
-
-                    time.sleep(2)
-                    show_message("System Ready")
+                    # 서보 + LED 병렬 동작 (열림 -> 5초 -> 닫힘)
+                    open_lid(result["class_name"])
                 else:
-                    print("[INFO] No object detected.")
-                    show_message("No object", "detected")
+                    print("[INFO] Could not classify.")
+                    show_message("Try again")
                     time.sleep(1)
-                    show_message("System Ready")
+                clear()
+                time.sleep(1)  # 연속 트리거 방지
 
-                time.sleep(1)
+            # --- 온습도 주기적 체크 ---
+            now = time.time()
+            if dht is not None and now - last_env_check >= DHT_INTERVAL:
+                try:
+                    temp = dht.temperature
+                    humid = dht.humidity
+                    if temp is not None and humid is not None:
+                        print(f"[ENV] Temp: {temp}C  Humidity: {humid}%")
+                except RuntimeError:
+                    pass
+                last_env_check = now
 
-            else:
-                if not dht_failed:
-                    now = time.time()
-                    if now - last_env_check >= DHT_INTERVAL:
-                        try:
-                            temp = dht.temperature
-                            humid = dht.humidity
-                            if temp is not None and humid is not None:
-                                print(f"[ENV] Temp: {temp}C  Humidity: {humid}%")
-                        except RuntimeError:
-                            pass
-                        last_env_check = now
-
-                time.sleep(0.5)
+            time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n[INFO] Stopped by user.")
@@ -213,3 +201,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
