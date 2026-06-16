@@ -10,7 +10,7 @@ DHT_DATA_PIN = board.D22      # 데이터(S) 핀: GPIO22 (물리 15번)
 POWER_PIN = board.D27         # 전원 핀: GPIO27 (물리 13번) -> 센서 VCC에 연결
 
 # --- 동작 설정 ---
-READ_INTERVAL = 3            # 콘솔 출력 간격(초)
+READ_INTERVAL = 10            # 콘솔 출력 간격(초)
 WARMUP_TIME = 2              # 전원 인가 후 안정화 대기(초, DHT11은 최소 1초 필요)
 
 _thread = None

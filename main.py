@@ -35,6 +35,11 @@ BIN_GUIDE_MESSAGE = {
     "PAPER": "Paper",
 }
 
+BIN_LOCATION = {
+    "CAN_METAL": "--->>",
+    "PLASTIC":   "<<---",
+}
+
 LABEL_REMINDER = {
     "pet_with_label": "Remove label!",
     "pet_no_label": None,
@@ -67,6 +72,7 @@ class WasteClassifier:
         class_name = CLASS_TO_BIN.get(raw_class_name, "GENERAL_WASTE")
         message = BIN_GUIDE_MESSAGE.get(class_name, "Unknown")
         reminder = LABEL_REMINDER.get(raw_class_name)
+        location = BIN_LOCATION.get(class_name, "")
 
         return {
             "raw_class_name": raw_class_name,
@@ -74,6 +80,7 @@ class WasteClassifier:
             "confidence": confidence,
             "message": message,
             "reminder": reminder,
+            "location": location,
         }
 
     def classify_with_voting(self, capture_func, rounds: int = VOTE_ROUNDS, interval: float = VOTE_INTERVAL):
@@ -150,7 +157,9 @@ def main():
                         show_message(result["reminder"])
                         time.sleep(2)
 
-                    show_message(result["message"])
+                    # 1줄: 종류 / 2줄: 배출 위치
+                    location_line = f" {result['location']}" if result["location"] else ""
+                    show_message(result["message"], location_line)
                     open_lid(result["class_name"])   # 서보 + LED 병렬
                 else:
                     print("[INFO] Could not classify.")
